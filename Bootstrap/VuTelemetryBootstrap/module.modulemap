@@ -1,0 +1,7 @@
+module VuTelemetryBootstrap {
+    header "StartupTelemetry.h"
+    header "GhostCrash/GhostCrashInterceptor.h"
+    header "DylibProfiler.h"
+    header "VUObjCLogger.h"
+    export *
+}
