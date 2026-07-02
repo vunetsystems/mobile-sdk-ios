@@ -34,7 +34,7 @@ static NSLock *vu_loggerLock = nil;
 
 + (void)initializeIfNeeded {
     dispatch_once(&initToken, ^{
-        NSNumber *val = [[NSBundle mainBundle] infoDictionary][@"OtelExportDebugLogs"];
+        NSNumber *val = [[NSBundle mainBundle] infoDictionary][@"ExportDebugLogs"];
         if (val) {
             vu_exportDebugLogsEnabled = [val boolValue];
         }
@@ -53,7 +53,7 @@ static NSLock *vu_loggerLock = nil;
             @"event": @"config_read",
             @"sdk_version": @"0.0.1",
             @"environment": environment,
-            @"message": [NSString stringWithFormat:@"Read OtelExportDebugLogs from Info.plist: %@", vu_exportDebugLogsEnabled ? @"YES" : @"NO"]
+            @"message": [NSString stringWithFormat:@"Read ExportDebugLogs from Info.plist: %@", vu_exportDebugLogsEnabled ? @"YES" : @"NO"]
         };
         NSData *jsonData = [NSJSONSerialization dataWithJSONObject:payload options:NSJSONWritingSortedKeys error:nil];
         if (jsonData) {
