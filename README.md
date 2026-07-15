@@ -1,9 +1,9 @@
-# vuTelemetry v0.0.8 — pre-built XCFrameworks
+# vuTelemetry v0.0.9 — pre-built XCFrameworks
 
-Self-contained **dynamic** XCFrameworks for iOS (device + simulator):
+XCFrameworks for iOS (device + simulator):
 
-- `vuTelemetry.xcframework`
-- `vuTelemetrySDWebImage.xcframework`
+- `vuTelemetry.xcframework` (**dynamic**, self-contained)
+- `vuTelemetrySDWebImage.xcframework` (**static** — links into your app; resolves against `vuTelemetry.framework`)
 
 ## Compiler compatibility
 
@@ -18,7 +18,7 @@ Add as a remote Swift package (Xcode ▸ File ▸ Add Package Dependencies, or i
 `Package.swift`):
 
 ```swift
-.package(url: "https://github.com/vunetsystems/mobile-sdk-ios.git", from: "0.0.8")
+.package(url: "https://github.com/vunetsystems/mobile-sdk-ios.git", from: "0.0.9")
 ```
 
 then add the `vuTelemetry` product. SwiftPM fetches the prebuilt
@@ -53,9 +53,11 @@ run-script build phases that need direct access.
 
 ## Caveat: don't import OpenTelemetry directly
 
-Each framework embeds its own copy of OpenTelemetry. If your **app** also imports
-OpenTelemetry directly, you'll get a second copy with separate global state.
-Drive telemetry through `VuTelemetryClient` / `VuSpan` APIs instead.
+`vuTelemetry.framework` embeds OpenTelemetry and is the single owner of its global
+state. `vuTelemetrySDWebImage` is static and shares that one copy (it does not embed
+its own). If your **app** also imports OpenTelemetry directly, you'll get a second
+copy with separate global state — drive telemetry through `VuTelemetryClient` /
+`VuSpan` APIs instead.
 
 ## Slices
 
