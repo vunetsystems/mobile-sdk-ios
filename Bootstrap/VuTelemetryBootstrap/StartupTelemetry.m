@@ -104,8 +104,6 @@ static uint64_t vu_scene_connection_end_ns = 0;
         }
 
         [self refreshStaticInitAnchors];
-        
-        VU_LOG( "[StartupTelemetry] Initialized: processStartNs=%llu\n", _processStartNs);
     }
     return self;
 }
@@ -164,10 +162,10 @@ static uint64_t vu_scene_connection_end_ns = 0;
 - (uint64_t)processStartTimeFromKernel {
     uint64_t process_start_ns = vu_get_kernel_process_start_ns();
     if (process_start_ns == 0) {
-        VU_LOG( "[StartupTelemetry] sysctl failed, using current time\n");
+        VU_LOG("[startup] process start time unavailable — sysctl failed, using current time as fallback\n");
         return [StartupTelemetry currentTimeNs];
     }
-    VU_LOG( "[StartupTelemetry] Process start from kernel: %llu\n", process_start_ns);
+    VU_LOG("[startup] Process start time locked in from kernel\n");
     return process_start_ns;
 }
 
@@ -187,10 +185,10 @@ static uint64_t vu_scene_connection_end_ns = 0;
     // assertion sites in Swift can catch and diagnose the root cause.
 #if DEBUG
     if (vu_otel_sdk_init_begin_ns == 0) {
-        VU_LOG( "[vuTelemetry][BUG] markOtelSdkInitEnd called before begin was set\n");
+        VU_LOG("[startup] BUG: markOtelSdkInitEnd called before begin was set\n");
     } else if (vu_otel_sdk_init_begin_ns > endTicks) {
-        VU_LOG( "[vuTelemetry][BUG] markOtelSdkInitEnd captured end before begin (begin=%llu end=%llu)\n",
-                vu_otel_sdk_init_begin_ns, endTicks);
+        VU_LOG("[startup] BUG: markOtelSdkInitEnd end precedes begin — begin=%llu end=%llu\n",
+               vu_otel_sdk_init_begin_ns, endTicks);
     }
 #endif
 
@@ -524,8 +522,7 @@ void vu_dispatch_bootstrap_selector(SEL selector, const char *sourceLabel) {
 
     if (initializerClass != Nil && [initializerClass respondsToSelector:selector]) {
         ((void (*)(id, SEL))objc_msgSend)(initializerClass, selector);
-        VU_LOG( "[VuTelemetry] OTEL bootstrap init dispatched from %s\n", sourceLabel);
     } else {
-        VU_LOG( "[VuTelemetry] Failed to locate VuTelemetryAutoInitializer from %s\n", sourceLabel);
+        VU_LOG("[startup] VuTelemetryAutoInitializer not found — SDK init skipped (source: %s)\n", sourceLabel);
     }
 }

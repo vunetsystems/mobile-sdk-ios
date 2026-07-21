@@ -44,8 +44,6 @@ void vu_dylib_profiler_start(void) {
     atomic_store(&vu_dylib_profiler_state.record_count, 0);
     atomic_store(&vu_dylib_profiler_state.replay_phase, 1);
     vu_dylib_profiler_state.is_enabled = 1;
-
-    VU_LOG("[DylibProfiler] Started at tick %llu\n", vu_dylib_profiler_state.phase_start_ticks);
 }
 
 void vu_dylib_profiler_mark_replay_complete(void) {
@@ -61,8 +59,6 @@ void vu_dylib_profiler_on_image_added(const char *dylib_path, uint64_t timestamp
     uint32_t idx = atomic_fetch_add(&vu_dylib_profiler_state.record_count, 1);
     if (idx >= VU_DYLIB_PROFILER_MAX_DYLIBS) {
         atomic_fetch_sub(&vu_dylib_profiler_state.record_count, 1);
-        VU_LOG("[DylibProfiler] Record buffer full (%u/%u)\n",
-                idx, VU_DYLIB_PROFILER_MAX_DYLIBS);
         return;
     }
 

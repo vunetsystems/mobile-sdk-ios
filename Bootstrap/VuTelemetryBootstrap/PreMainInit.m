@@ -82,10 +82,16 @@ static void vuOnImageAdded(const struct mach_header *mh, intptr_t vmaddr_slide) 
 // MARK: - UIApplication Delegate Interception Helper
 
 static void vu_custom_setDelegate(id self, SEL _cmd, id delegate) {
-    // First delegate assignment occurs inside UIApplicationMain after pre-main.
-    // Trigger bootstrap init first so otel_sdk_init_end is captured before
-    // the pre-main boundary closes.
     if (vu_get_ui_application_delegate_assigned_ns() == 0) {
+        // Detect prewarm status before emitting the first log so the banner is accurate.
+        NSString *prewarmFlag = NSProcessInfo.processInfo.environment[@"ActivePrewarm"];
+        BOOL isPrewarmed = [prewarmFlag isEqualToString:@"1"];
+        vu_set_is_prewarmed(isPrewarmed);
+
+        VU_LOG("[startup] vuTelemetry loaded — %s start, %sprewarmed\n",
+               isPrewarmed ? "warm" : "cold",
+               isPrewarmed ? "" : "not ");
+
         // Install all instrumentation hooks and activate the buffering TracerProvider
         // synchronously before any app code runs. Must precede the async OTel bootstrap
         // so spans produced during scene:willConnectToSession are captured.
@@ -97,39 +103,25 @@ static void vu_custom_setDelegate(id self, SEL _cmd, id delegate) {
             SEL installAllSel = sel_registerName("installAll");
             if ([hooksClass respondsToSelector:installAllSel]) {
                 ((void (*)(id, SEL))objc_msgSend)(hooksClass, installAllSel);
-                VU_LOG( "[vuTelemetry] VUInstrumentationHooks.installAll() completed\n");
             }
         } else {
-            VU_LOG( "[vuTelemetry] VUInstrumentationHooks class not found — hooks not installed\n");
+            VU_LOG("[startup] instrumentation hooks class not found — hooks not installed\n");
         }
 
         // Constructor(201) has already run by now, so begin boundary is available.
         vu_dispatch_bootstrap_selector(NSSelectorFromString(@"preMainInitializeFromInfoPlist"), "setDelegate hook");
 
-        // Capture the moment UIApplication setDelegate is called (for reference, post-main)
         uint64_t delegateAssignedMach = mach_absolute_time();
-        uint64_t delegateAssignedNs = vu_mach_time_to_unix_nanos(delegateAssignedMach);
         vu_set_ui_application_delegate_assigned_ns(delegateAssignedMach);
-        
+
 #if DEBUG
-        // Mark end of dylib profiling phase
         vu_dylib_profiler_end_phase(delegateAssignedMach);
 #endif
 
-        // Signal entry to main() phase
         ghost_crash_set_phase(GhostCrashPhaseMain);
-
-        NSString *prewarmFlag = NSProcessInfo.processInfo.environment[@"ActivePrewarm"];
-        vu_set_is_prewarmed([prewarmFlag isEqualToString:@"1"]);
-
-        // Resolve thermal state for stage 1 metrics since we are post-main now
         vu_resolve_pre_main_thermal_state();
 
-        VU_LOG( "[vuTelemetry] ui_application_delegate_assigned captured: %llu (image_count=%u prewarmed=%d)\n",
-                delegateAssignedNs, vu_image_callback_count, [prewarmFlag isEqualToString:@"1"]);
-        
 #if DEBUG
-        // Dump dylib profiling report
         if ([VUObjCLogger exportDebugLogsEnabled]) {
             vu_dylib_profiler_report();
         }
@@ -169,16 +161,15 @@ static void vuInstallUIApplicationSwizzle(void) {
                 if (replacementMethod != NULL) {
                     method_exchangeImplementations(originalMethod, replacementMethod);
                     swizzleInstalled = YES;
-                    VU_LOG( "[vuTelemetry] UIApplication setDelegate hook installed dynamically via exchange\n");
                 }
             } else {
-                VU_LOG( "[vuTelemetry] Failed to add vu_custom_setDelegate: method dynamically\n");
+                VU_LOG("[startup] setDelegate swizzle install failed — hook not added to UIApplication\n");
             }
         } else {
-            VU_LOG( "[vuTelemetry] UIApplication setDelegate method not found dynamically\n");
+            VU_LOG("[startup] UIApplication setDelegate method not found — delegate hook skipped\n");
         }
     } else {
-        VU_LOG( "[vuTelemetry] UIApplication class not found dynamically\n");
+        VU_LOG("[startup] UIApplication class not found — delegate hook skipped\n");
     }
 }
 
@@ -196,7 +187,6 @@ static int vu_hooked_main(int argc, char *argv[]) {
 static void vuInstallMainHook(void) {
     struct rebinding rb[] = {{"main", (void *)vu_hooked_main, (void **)&original_main}};
     rebind_symbols(rb, 1);
-    VU_LOG( "[vuTelemetry] main() hook installed via fishhook\n");
 }
 
 // MARK: - VUPreMainProbe: +load Registration
@@ -208,26 +198,16 @@ static void vuInstallMainHook(void) {
 
 + (void)load {
 #if DEBUG
-    // Start dylib profiler early — debug only; skipped in release to avoid per-image overhead
     vu_dylib_profiler_start();
-    VU_LOG( "[vuTelemetry] dylib profiler enabled\n");
 #endif
 
-    // Register dyld image callback for timing anchors (always) and profiling (debug only).
-    // NOTE: _dyld_register_func_for_add_image backfills all already-loaded images synchronously,
-    // so the callback must be as lightweight as possible in release builds.
     _dyld_register_func_for_add_image(&vuOnImageAdded);
 #if DEBUG
-    // Finding #12: Mark replay phase complete so post-registration callbacks are flagged correctly
     vu_dylib_profiler_mark_replay_complete();
 #endif
     atomic_store(&vu_initial_dylib_scan_complete, YES);
-    VU_LOG( "[vuTelemetry] dyld image callback registered from +load\n");
 
-    // Install main() hook to capture true end of static initializers
     vuInstallMainHook();
-
-    // Attempt to install swizzle at +load
     vuInstallUIApplicationSwizzle();
 }
 
@@ -258,26 +238,17 @@ static void vuCaptureProcessStart(void) {
     uint64_t staticInitBeginMach = machTimeAtProcessStart;
     vu_set_static_init_begin_ns(vu_mach_time_to_unix_nanos(staticInitBeginMach));
     
-    // Fallback if dylib callbacks haven't fired (on simulator with cached dylibs)
     if (dylibLoadedEnd == 0) {
         vu_set_dylib_loaded_end_mach(mach_absolute_time());
-        VU_LOG( "[VuTelemetry] ⚠️ dylib_loaded_end fallback (cached images?) — callbacks: %u\n",
-                vu_image_callback_count);
-    } else {
-        VU_LOG( "[VuTelemetry] dylib_loaded_end captured after %u images: %llu mach ticks, wall: %llu ns\n",
-                vu_image_callback_count, dylibLoadedEnd, vu_get_static_init_begin_ns());
     }
 
-    // Finding #17: Use constructor timestamp as the boundary instead of fabricating a -1 offset
     uint64_t normalizedDylibEndMach = vu_get_dylib_loaded_end_mach();
     if (normalizedDylibEndMach >= staticInitBeginMach) {
         vu_set_dylib_loaded_end_mach(staticInitBeginMach);
-        normalizedDylibEndMach = staticInitBeginMach;
-        VU_LOG("[VuTelemetry] dylib_loaded_end clamped to static_init_begin (dyld and static init overlap)\n");
     }
-    
-    VU_LOG( "[VuTelemetry] Constructor(101) captured: process_start=%llu, static_init_begin=%llu\n",
-            vu_get_kernel_process_start_ns(), vu_get_static_init_begin_ns());
+
+    VU_LOG("[startup] Pre-main monitors active — dylib loading, static initializers, and OTel SDK init boundary will be captured (%u images loaded)\n",
+           vu_image_callback_count);
 
     // Capture and store Stage 1 metrics
     VUStage1Metrics stage1 = vu_capture_pre_main_metrics();
@@ -297,7 +268,6 @@ __attribute__((constructor(199)))
 static void vuMarkPreSDKStaticInitEnd(void) {
     uint64_t preSDKEndMach = mach_absolute_time();
     vu_set_pre_sdk_static_init_end_ns(preSDKEndMach);
-    VU_LOG( "[VuTelemetry] Constructor(199) captured pre-SDK static init end: %llu mach ticks\n", preSDKEndMach);
 }
 
 // MARK: - Constructor(201): Mark OTel SDK Initialization Begin
@@ -313,8 +283,6 @@ static void vuMarkOtelSdkInitBegin(void) {
     vu_set_otel_sdk_init_begin_ns(otelBeginMach);
     uint64_t anchorMach = vu_get_mach_time_at_process_start();
     int64_t delta = (int64_t)otelBeginMach - (int64_t)anchorMach;
-    VU_LOG( "[VuTelemetry] Constructor(201) marked OTel SDK init begin: mach=%llu anchor=%llu delta=%lld\n",
-            otelBeginMach, anchorMach, delta);
 #if DEBUG
     assert(anchorMach > 0 && "Constructor(101) anchor must be captured before Constructor(201)");
     assert(delta >= 0 && "OTel SDK init begin must not precede Constructor(101) mach anchor");

@@ -10,6 +10,16 @@
 
 #import <Foundation/Foundation.h>
 
+// C-level disabled flag — set by vu_mark_sdk_disabled() and checked by VUObjCLogger.
+// Callable from Swift via the VuTelemetryBootstrap module's public headers.
+#ifdef __cplusplus
+extern "C" {
+#endif
+void vu_mark_sdk_disabled(void);
+#ifdef __cplusplus
+}
+#endif
+
 typedef NS_ENUM(NSInteger, VULogLevel) {
     VULogLevelDebug,
     VULogLevelInfo,

@@ -56,23 +56,13 @@ static BOOL vu_willFinishLaunching_wrapper(id self, SEL _cmd, UIApplication *app
     vu_set_will_finish_launching_begin_ns(mach_absolute_time());
     BOOL result = vu_cached_willFinish_IMP ? vu_cached_willFinish_IMP(self, _cmd, app, opts) : YES;
     vu_set_will_finish_launching_end_ns(mach_absolute_time());
-#if DEBUG
-    VU_LOG("[VULifecycleSwizzler] willFinish captured begin=%llu end=%llu\n",
-            vu_get_will_finish_launching_begin_ns(), vu_get_will_finish_launching_end_ns());
-#endif
     return result;
 }
 
 static BOOL vu_didFinishLaunching_wrapper(id self, SEL _cmd, UIApplication *app, NSDictionary *opts) {
-    VU_LOG("[VULifecycleSwizzler] didFinish ENTERED\n");
     vu_set_did_finish_launching_begin_ns(mach_absolute_time());
     BOOL result = vu_cached_didFinish_IMP ? vu_cached_didFinish_IMP(self, _cmd, app, opts) : YES;
     vu_set_did_finish_launching_end_ns(mach_absolute_time());
-#if DEBUG
-    VU_LOG("[VULifecycleSwizzler] didFinish captured begin=%llu end=%llu\n",
-            vu_get_did_finish_launching_begin_ns(), vu_get_did_finish_launching_end_ns());
-#endif
-    VU_LOG("[VULifecycleSwizzler] didFinish EXITING with result=%d\n", result);
     return result;
 }
 
@@ -80,15 +70,12 @@ static void vu_sceneWillConnect_wrapper(id self, SEL _cmd, UIScene *scene,
                                          UISceneSession *session,
                                          UISceneConnectionOptions *connectionOptions) {
     SceneDelegateMethodIMP originalIMP = vu_cached_sceneWillConnect_IMP;
-
     if (vu_get_scene_connection_begin_ns() == 0) {
         vu_set_scene_connection_begin_ns(mach_absolute_time());
         if (originalIMP) {
             originalIMP(self, @selector(scene:willConnectToSession:options:), scene, session, connectionOptions);
         }
         vu_set_scene_connection_end_ns(mach_absolute_time());
-        VU_LOG("[VULifecycleSwizzler] scene:willConnect captured begin=%llu end=%llu\n",
-                vu_get_scene_connection_begin_ns(), vu_get_scene_connection_end_ns());
     } else {
         if (originalIMP) {
             originalIMP(self, @selector(scene:willConnectToSession:options:), scene, session, connectionOptions);
@@ -132,19 +119,13 @@ static id _sceneWillConnectObserverToken = nil;
                 id sceneDelegate = scene.delegate;
                 if (sceneDelegate) {
                     Class sceneClass = [sceneDelegate class];
-                    VU_LOG("[VULifecycleSwizzler] Resolved scene delegate class via notification: %s\n",
-                           class_getName(sceneClass));
                     [VULifecycleSwizzler installSceneConnectionOn:sceneClass];
                 }
 
-                // Fallback timing: if the first scene:willConnect already ran before
-                // the swizzle was in place, record the notification moment so the
-                // scene.connected lifecycle event still fires.
                 if (vu_get_scene_connection_begin_ns() == 0) {
                     uint64_t now = mach_absolute_time();
                     vu_set_scene_connection_begin_ns(now);
                     vu_set_scene_connection_end_ns(now);
-                    VU_LOG("[VULifecycleSwizzler] First-scene timing recorded from notification (swizzle too late)\n");
                 }
 
                 // One-shot: remove ourselves once the swizzle is in place.
@@ -179,7 +160,7 @@ static id _sceneWillConnectObserverToken = nil;
     [self installDidFinishLaunchingOn:delegateClass];
     [self installSceneSwizzleObserver];
 
-    VU_LOG("[VULifecycleSwizzler] Installed on %s\n", class_getName(delegateClass));
+    VU_LOG("[lifecycle] app lifecycle + main() entry will be captured\n");
 }
 
 // MARK: - willFinishLaunching Swizzle
@@ -189,32 +170,20 @@ static id _sceneWillConnectObserverToken = nil;
 
     Method origMethod = class_getInstanceMethod(delegateClass, originalSel);
 
-    VU_LOG("[VULifecycleSwizzler] installWillFinishLaunching on %s: origMethod=%s\n",
-            class_getName(delegateClass), origMethod ? "found" : "NOT FOUND");
-
     if (origMethod) {
         AppDelegateMethodIMP origIMP = (AppDelegateMethodIMP)method_getImplementation(origMethod);
         NSString *className = [NSString stringWithUTF8String:class_getName(delegateClass)];
         @synchronized(willFinishOriginalIMPs) {
             willFinishOriginalIMPs[className] = [NSValue valueWithPointer:(const void *)origIMP];
         }
-        // Cache the IMP for direct use in the hot-path wrapper (avoids @synchronized at call time).
         vu_cached_willFinish_IMP = origIMP;
 
-        // Guard against superclass poisoning: if delegateClass doesn't directly
-        // implement this method, class_getInstanceMethod returns the superclass Method.
-        // class_addMethod adds it on delegateClass only; if it already exists, it fails
-        // and we can safely replace on the direct class.
         BOOL added = class_addMethod(delegateClass, originalSel,
                                      (IMP)vu_willFinishLaunching_wrapper,
                                      method_getTypeEncoding(origMethod));
         if (!added) {
             method_setImplementation(origMethod, (IMP)vu_willFinishLaunching_wrapper);
         }
-        VU_LOG("[VULifecycleSwizzler] willFinishLaunching swizzle INSTALLED (added=%d)\n", added);
-    } else {
-        VU_LOG("[VULifecycleSwizzler] %s does not implement willFinishLaunchingWithOptions\n",
-                class_getName(delegateClass));
     }
 }
 
@@ -225,16 +194,12 @@ static id _sceneWillConnectObserverToken = nil;
 
     Method origMethod = class_getInstanceMethod(delegateClass, originalSel);
 
-    VU_LOG("[VULifecycleSwizzler] installDidFinishLaunching on %s: origMethod=%s\n",
-            class_getName(delegateClass), origMethod ? "found" : "NOT FOUND");
-
     if (origMethod) {
         AppDelegateMethodIMP origIMP = (AppDelegateMethodIMP)method_getImplementation(origMethod);
         NSString *className = [NSString stringWithUTF8String:class_getName(delegateClass)];
         @synchronized(didFinishOriginalIMPs) {
             didFinishOriginalIMPs[className] = [NSValue valueWithPointer:(const void *)origIMP];
         }
-        // Cache the IMP for direct use in the hot-path wrapper (avoids @synchronized at call time).
         vu_cached_didFinish_IMP = origIMP;
 
         BOOL added = class_addMethod(delegateClass, originalSel,
@@ -243,10 +208,6 @@ static id _sceneWillConnectObserverToken = nil;
         if (!added) {
             method_setImplementation(origMethod, (IMP)vu_didFinishLaunching_wrapper);
         }
-        VU_LOG("[VULifecycleSwizzler] didFinishLaunching swizzle INSTALLED (added=%d)\n", added);
-    } else {
-        VU_LOG("[VULifecycleSwizzler] %s does not implement didFinishLaunchingWithOptions\n",
-                class_getName(delegateClass));
     }
 }
 
@@ -272,8 +233,6 @@ static id _sceneWillConnectObserverToken = nil;
             }
             // Cache the IMP for direct use in the hot-path wrapper (avoids @synchronized at call time).
             vu_cached_sceneWillConnect_IMP = originalIMP;
-            VU_LOG("[VULifecycleSwizzler] Saved original_sceneWillConnect IMP for %s: %p\n",
-                    class_getName(delegateClass), originalIMP);
 
             BOOL added = class_addMethod(delegateClass, originalSel,
                                          (IMP)vu_sceneWillConnect_wrapper,
@@ -281,11 +240,6 @@ static id _sceneWillConnectObserverToken = nil;
             if (!added) {
                 method_setImplementation(origMethod, (IMP)vu_sceneWillConnect_wrapper);
             }
-            VU_LOG("[VULifecycleSwizzler] Installed scene:willConnectToSession on %s (added=%d)\n",
-                    class_getName(delegateClass), added);
-        } else {
-            VU_LOG("[VULifecycleSwizzler] Scene delegate %s does not implement scene:willConnectToSession\n",
-                    class_getName(delegateClass));
         }
     }
 }
