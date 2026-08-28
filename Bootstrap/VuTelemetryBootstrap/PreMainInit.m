@@ -281,9 +281,9 @@ static void vuMarkOtelSdkInitBegin(void) {
     // to OTel SDK initialization cost.
     uint64_t otelBeginMach = mach_absolute_time();
     vu_set_otel_sdk_init_begin_ns(otelBeginMach);
+#if DEBUG
     uint64_t anchorMach = vu_get_mach_time_at_process_start();
     int64_t delta = (int64_t)otelBeginMach - (int64_t)anchorMach;
-#if DEBUG
     assert(anchorMach > 0 && "Constructor(101) anchor must be captured before Constructor(201)");
     assert(delta >= 0 && "OTel SDK init begin must not precede Constructor(101) mach anchor");
 #endif
