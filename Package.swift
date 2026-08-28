@@ -16,15 +16,15 @@ let package = Package(
         .package(url: "https://github.com/SDWebImage/SDWebImage.git", exact: "5.21.7"),
     ],
     targets: [
-        .binaryTarget(name: "vuTelemetry", url: "https://github.com/vunetsystems/mobile-sdk-ios/releases/download/v0.0.12/vuTelemetry.xcframework.zip", checksum: "765857b495ccda77987440415584270c91aa92ae7f8a9277947c93571ee2f3a6"),
+        .binaryTarget(name: "vuTelemetry", url: "https://github.com/vunetsystems/mobile-sdk-ios/releases/download/v0.0.12/vuTelemetry.xcframework.zip", checksum: "73f272e16859636644761dc6377e7e9b0cf5966d4f2bbd5049f0fb9a2600946d"),
         .target(name: "VuTelemetryBootstrap", path: "Bootstrap/VuTelemetryBootstrap", publicHeadersPath: "."),
         .target(name: "vuTelemetryDeps", path: "Deps"),
-        .binaryTarget(name: "vuTelemetrySDWebImage", url: "https://github.com/vunetsystems/mobile-sdk-ios/releases/download/v0.0.12/vuTelemetrySDWebImage.xcframework.zip", checksum: "e5123bc240b6ab71d1f7557593ec0b0b2fece20c9ee827ca5e57d6efc7aad628"),
+        .binaryTarget(name: "vuTelemetrySDWebImage", url: "https://github.com/vunetsystems/mobile-sdk-ios/releases/download/v0.0.12/vuTelemetrySDWebImage.xcframework.zip", checksum: "8b8b329770228e3153b80e126329b1c2bc42cc8f7d72d8ae00917b42c26b3544"),
         .target(name: "VUSDWebImageBootstrap", path: "Bootstrap/VUSDWebImageBootstrap", publicHeadersPath: "include"),
         .target(name: "vuTelemetrySDWebImageDeps", dependencies: [
             .product(name: "SDWebImage", package: "SDWebImage"),
         ], path: "DepsSDWI"),
-        .binaryTarget(name: "VUSourceInstrumenter", url: "https://github.com/vunetsystems/mobile-sdk-ios/releases/download/v0.0.12/VUSourceInstrumenter.artifactbundle.zip", checksum: "3912fb39d9fe0de7c66b0ab3a1d8b191efa8194c5cc9ff92017183d13809b614"),
+        .binaryTarget(name: "VUSourceInstrumenter", url: "https://github.com/vunetsystems/mobile-sdk-ios/releases/download/v0.0.12/VUSourceInstrumenter.artifactbundle.zip", checksum: "2cd0fdcf41863c4af8df12e95f40ee143ac3a4786636c7f6a70c3cdf20c37b72"),
         .plugin(
             name: "VUInstrumentationPlugin",
             capability: .buildTool(),
