@@ -1,5 +1,5 @@
 // swift-tools-version: 6.1
-// vuTelemetry v0.0.15 — pre-built binary package. See README.md.
+// vuTelemetry v0.0.16 — pre-built binary package. See README.md.
 // Built WITH library evolution: portable .swiftinterface, consumable by any Xcode >= Xcode 26.5.
 import PackageDescription
 
@@ -16,15 +16,15 @@ let package = Package(
         .package(url: "https://github.com/SDWebImage/SDWebImage.git", exact: "5.21.7"),
     ],
     targets: [
-        .binaryTarget(name: "vuTelemetry", url: "https://github.com/vunetsystems/mobile-sdk-ios/releases/download/v0.0.15/vuTelemetry.xcframework.zip", checksum: "0ba9978ec6b78bb2773c524091bad9473140818eb2a5c1c75419b8b3c6bda6a7"),
+        .binaryTarget(name: "vuTelemetry", url: "https://github.com/vunetsystems/mobile-sdk-ios/releases/download/v0.0.16/vuTelemetry.xcframework.zip", checksum: "f288acf64497a0a8860a75fbb6e8e44470d81514f59bbce1299a72d9b04cee1b"),
         .target(name: "VuTelemetryBootstrap", path: "Bootstrap/VuTelemetryBootstrap", publicHeadersPath: "."),
         .target(name: "vuTelemetryDeps", path: "Deps"),
-        .binaryTarget(name: "vuTelemetrySDWebImage", url: "https://github.com/vunetsystems/mobile-sdk-ios/releases/download/v0.0.15/vuTelemetrySDWebImage.xcframework.zip", checksum: "e27dad11287b19b8a6d4103730f4e8df22dfea0913af1e99bd258ac6da9939dd"),
+        .binaryTarget(name: "vuTelemetrySDWebImage", url: "https://github.com/vunetsystems/mobile-sdk-ios/releases/download/v0.0.16/vuTelemetrySDWebImage.xcframework.zip", checksum: "97024926874eb131fb90b5adaa69eef6466cc0038beb77e20cc4fadf6a6b7ad4"),
         .target(name: "VUSDWebImageBootstrap", path: "Bootstrap/VUSDWebImageBootstrap", publicHeadersPath: "include"),
         .target(name: "vuTelemetrySDWebImageDeps", dependencies: [
             .product(name: "SDWebImage", package: "SDWebImage"),
         ], path: "DepsSDWI"),
-        .binaryTarget(name: "VUSourceInstrumenter", url: "https://github.com/vunetsystems/mobile-sdk-ios/releases/download/v0.0.15/VUSourceInstrumenter.artifactbundle.zip", checksum: "897c7418cb5b63ce1623078143b63acf9d9b61fbc63bd92df80d9ed992d7bd88"),
+        .binaryTarget(name: "VUSourceInstrumenter", url: "https://github.com/vunetsystems/mobile-sdk-ios/releases/download/v0.0.16/VUSourceInstrumenter.artifactbundle.zip", checksum: "da0ce8d3ae48b0d16d18998ed1c169dd4a16e65c97e5370fa486eef84b657eea"),
         .plugin(
             name: "VUInstrumentationPlugin",
             capability: .buildTool(),
