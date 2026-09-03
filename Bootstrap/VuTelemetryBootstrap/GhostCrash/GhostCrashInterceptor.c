@@ -178,11 +178,36 @@ static void ghost_crash_install_handlers(void) {
     // 3. Mark phase transition to static initialization
     ghost_crash_set_phase(GhostCrashPhaseStaticInit);
 
-    // Finding #4: Pre-cache device info at init time
-    size_t len = sizeof(s_os_version);
-    sysctlbyname("kern.osversion", s_os_version, &len, NULL, 0);
-    len = sizeof(s_device_model);
-    sysctlbyname("hw.machine", s_device_model, &len, NULL, 0);
+    // Finding #4: Pre-cache device info at init time.
+    //
+    // These two feed the canonical `resource.os.version` /
+    // `resource.device.model.identifier` span attributes on `device.crash`, so they
+    // must match the domains `OtelResourceBuilder` uses for the same keys on
+    // `app.start` (ResourceBuilder.swift:172 / :234-246):
+    //   - `kern.osproductversion` is the marketing version ("18.6"). NOT
+    //     `kern.osversion`, which is the Darwin build id ("22G91") and would put a
+    //     build id under a version key.
+    //   - `hw.machine` is the model identifier ("iPhone15,2").
+    // On the simulator both sysctls fall through to the *host* Mac (macOS version,
+    // "arm64"), so prefer CoreSimulator's env vars — the same simulator carve-out
+    // `OtelResourceBuilder.getDeviceModelIdentifier()` makes in Swift. Reading env
+    // and sysctl here is fine: this runs at handler-install time, not inside the
+    // async-signal-safe handler.
+    const char *sim_os = getenv("SIMULATOR_RUNTIME_VERSION");
+    if (sim_os && sim_os[0]) {
+        strlcpy(s_os_version, sim_os, sizeof(s_os_version));
+    } else {
+        size_t len = sizeof(s_os_version);
+        sysctlbyname("kern.osproductversion", s_os_version, &len, NULL, 0);
+    }
+
+    const char *sim_model = getenv("SIMULATOR_MODEL_IDENTIFIER");
+    if (sim_model && sim_model[0]) {
+        strlcpy(s_device_model, sim_model, sizeof(s_device_model));
+    } else {
+        size_t len = sizeof(s_device_model);
+        sysctlbyname("hw.machine", s_device_model, &len, NULL, 0);
+    }
 
     // Finding #5: Pre-cache timebase info
     mach_timebase_info_data_t tb;
@@ -303,7 +328,11 @@ static void ghost_crash_signal_handler(int signum, siginfo_t *info, void *contex
     vu_build_json_field_uint(json_buffer, &pos, "crash.cpu_user_time_ns", cpu_user_time_ns, 0);
     vu_build_json_field_uint(json_buffer, &pos, "crash.cpu_system_time_ns", cpu_system_time_ns, 0);
     vu_build_json_field_str(json_buffer, &pos, "crash.export_status", "pending_next_boot", 0);
-    vu_build_json_field_str(json_buffer, &pos, "crash.sdk_version", "0.0.1", 0);
+    // Feeds the canonical `resource.vunet.sdk.version` on `device.crash`. Must track
+    // `OtelResourceBuilder`'s value for the same key (ResourceBuilder.swift:178) or the
+    // two spans of one ghost recovery report different SDK versions. Both are hardcoded
+    // literals; a shared constant would have to cross the C/Swift boundary.
+    vu_build_json_field_str(json_buffer, &pos, "crash.sdk_version", "1.0.0", 0);
     // Finding #4: Read from pre-cached static buffers
     vu_build_json_field_str(json_buffer, &pos, "crash.os_version", s_os_version, 0);
     vu_build_json_field_str(json_buffer, &pos, "crash.device_model", s_device_model, 0);

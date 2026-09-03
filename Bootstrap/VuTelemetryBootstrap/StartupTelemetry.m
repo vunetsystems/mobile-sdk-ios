@@ -56,6 +56,19 @@ static uint64_t vu_otel_sdk_init_begin_ns = 0;
 /// OTel SDK initialization end (mach_absolute_time ticks)
 static uint64_t vu_otel_sdk_init_end_ns = 0;
 
+/// Post-launch SDK-ready window begin — UIApplicationDidFinishLaunchingNotification
+/// observer entry, before the bootstrap selector is dispatched (mach_absolute_time ticks).
+///
+/// Distinct from vu_otel_sdk_init_begin_ns: that pair brackets the *pre-main* constructor
+/// window (which in the default deferred mode contains no SDK initialization at all and
+/// exists only to give ghost crashes a phase). This pair brackets the real post-launch
+/// initialization — providers, exporters, trackers and the crash reporter.
+static uint64_t vu_sdk_ready_begin_ns = 0;
+
+/// Post-launch SDK-ready window end — after every tracker and the crash reporter are
+/// installed (mach_absolute_time ticks).
+static uint64_t vu_sdk_ready_end_ns = 0;
+
 /// iOS 15+ pre-warming detection flag
 static BOOL vu_is_prewarmed = NO;
 
@@ -209,6 +222,20 @@ static uint64_t vu_scene_connection_end_ns = 0;
     return [self machTimeToUnixNanos:machTicks];
 }
 
+/// Convert post-launch SDK-ready begin timestamp (mach ticks → wall-clock nanoseconds)
++ (uint64_t)sdkReadyBeginNsWallClock {
+    uint64_t machTicks = vu_get_sdk_ready_begin_ns();
+    if (machTicks == 0) return 0;
+    return [self machTimeToUnixNanos:machTicks];
+}
+
+/// Convert post-launch SDK-ready end timestamp (mach ticks → wall-clock nanoseconds)
++ (uint64_t)sdkReadyEndNsWallClock {
+    uint64_t machTicks = vu_get_sdk_ready_end_ns();
+    if (machTicks == 0) return 0;
+    return [self machTimeToUnixNanos:machTicks];
+}
+
 @end
 
 // MARK: - Startup Metrics Tracking
@@ -358,6 +385,28 @@ uint64_t vu_get_otel_sdk_init_begin_ns(void) {
 
 uint64_t vu_get_otel_sdk_init_end_ns(void) {
     return vu_otel_sdk_init_end_ns;
+}
+
+uint64_t vu_get_sdk_ready_begin_ns(void) {
+    return vu_sdk_ready_begin_ns;
+}
+
+uint64_t vu_get_sdk_ready_end_ns(void) {
+    return vu_sdk_ready_end_ns;
+}
+
+void vu_mark_sdk_ready_begin(void) {
+    // First writer wins: the launch notification fires once, but a host that posts it
+    // manually (or a re-entrant observer) must not move the anchor forward.
+    if (vu_sdk_ready_begin_ns == 0) {
+        vu_sdk_ready_begin_ns = mach_absolute_time();
+    }
+}
+
+void vu_mark_sdk_ready_end(void) {
+    if (vu_sdk_ready_end_ns == 0) {
+        vu_sdk_ready_end_ns = mach_absolute_time();
+    }
 }
 
 BOOL vu_get_is_prewarmed(void) {

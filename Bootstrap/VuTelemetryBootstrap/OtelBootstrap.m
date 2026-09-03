@@ -32,6 +32,11 @@
 #if __has_include(<UIKit/UIKit.h>)
 + (void)applicationDidFinishLaunching:(NSNotification *)notification {
 	(void)notification;
+	// Post-launch SDK-ready window opens here rather than at initializeFromInfoPlist()
+	// entry, so the measurement includes the @MainActor dispatch gap. The consumer-facing
+	// question is "how long after launch until telemetry is live", not "how long does the
+	// initialize function body take".
+	vu_mark_sdk_ready_begin();
 	vu_dispatch_bootstrap_selector(NSSelectorFromString(@"initializeFromInfoPlist"), "launch-observer");
 
 	[[NSNotificationCenter defaultCenter] removeObserver:self

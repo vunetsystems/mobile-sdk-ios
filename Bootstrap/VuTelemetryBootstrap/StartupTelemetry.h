@@ -56,6 +56,20 @@ uint64_t vu_get_otel_sdk_init_begin_ns(void);
 /// OTel SDK initialization end — MACH TICKS (not nanoseconds despite name)
 uint64_t vu_get_otel_sdk_init_end_ns(void);
 
+/// Post-launch SDK-ready window — MACH TICKS.
+///
+/// Brackets the *real* initialization: from the
+/// UIApplicationDidFinishLaunchingNotification observer through providers, exporters,
+/// trackers and the crash reporter. Deliberately distinct from the
+/// vu_get_otel_sdk_init_* pair, which brackets the pre-main constructor window and
+/// contains no SDK initialization in the default deferred mode.
+uint64_t vu_get_sdk_ready_begin_ns(void);
+uint64_t vu_get_sdk_ready_end_ns(void);
+
+/// Mark the post-launch SDK-ready window. Both are first-writer-wins no-ops if already set.
+void vu_mark_sdk_ready_begin(void);
+void vu_mark_sdk_ready_end(void);
+
 /// Prewarming flag (iOS 15+)
 BOOL vu_get_is_prewarmed(void);
 
@@ -169,6 +183,12 @@ void vu_resolve_pre_main_thermal_state(void);
 
 /// Convert OTel SDK init end timestamp (mach ticks → wall-clock nanoseconds)
 + (uint64_t)otelSdkInitEndNsWallClock;
+
+/// Convert post-launch SDK-ready begin timestamp (mach ticks → wall-clock nanoseconds)
++ (uint64_t)sdkReadyBeginNsWallClock;
+
+/// Convert post-launch SDK-ready end timestamp (mach ticks → wall-clock nanoseconds)
++ (uint64_t)sdkReadyEndNsWallClock;
 
 @end
 
