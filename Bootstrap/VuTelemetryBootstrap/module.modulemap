@@ -1,4 +1,5 @@
 module VuTelemetryBootstrap {
+    header "VuTelemetryVersion.h"
     header "StartupTelemetry.h"
     header "GhostCrash/GhostCrashInterceptor.h"
     header "DylibProfiler.h"

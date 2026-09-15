@@ -6,6 +6,7 @@
 //  Output format: "message" or "message — key=value ..." with no JSON wrapping.
 
 #import "VUObjCLogger.h"
+#import "VuTelemetryVersion.h"
 #import <os/log.h>
 
 static BOOL vu_exportDebugLogsEnabled = NO;
@@ -57,7 +58,7 @@ void vu_mark_sdk_disabled(void) {
             @"timestamp": timestamp,
             @"component": @"logger",
             @"event": @"config_read",
-            @"sdk_version": @"0.0.1",
+            @"sdk_version": @VU_TELEMETRY_SDK_VERSION,
             @"environment": environment,
             @"message": [NSString stringWithFormat:@"Read ExportDebugLogs from Info.plist: %@", vu_exportDebugLogsEnabled ? @"YES" : @"NO"]
         };

@@ -6,6 +6,7 @@
 //
 
 #include "GhostCrashInterceptor.h"
+#include "VuTelemetryVersion.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -328,11 +329,10 @@ static void ghost_crash_signal_handler(int signum, siginfo_t *info, void *contex
     vu_build_json_field_uint(json_buffer, &pos, "crash.cpu_user_time_ns", cpu_user_time_ns, 0);
     vu_build_json_field_uint(json_buffer, &pos, "crash.cpu_system_time_ns", cpu_system_time_ns, 0);
     vu_build_json_field_str(json_buffer, &pos, "crash.export_status", "pending_next_boot", 0);
-    // Feeds the canonical `resource.vunet.sdk.version` on `device.crash`. Must track
-    // `OtelResourceBuilder`'s value for the same key (ResourceBuilder.swift:178) or the
-    // two spans of one ghost recovery report different SDK versions. Both are hardcoded
-    // literals; a shared constant would have to cross the C/Swift boundary.
-    vu_build_json_field_str(json_buffer, &pos, "crash.sdk_version", "1.0.0", 0);
+    // Feeds the canonical `resource.vunet.sdk.version` on `device.crash`.
+    // Same macro as `OtelResourceBuilder` / `VuTelemetryVersion.current`
+    // (`VuTelemetryVersion.h`) so app.start and device.crash stay aligned.
+    vu_build_json_field_str(json_buffer, &pos, "crash.sdk_version", VU_TELEMETRY_SDK_VERSION, 0);
     // Finding #4: Read from pre-cached static buffers
     vu_build_json_field_str(json_buffer, &pos, "crash.os_version", s_os_version, 0);
     vu_build_json_field_str(json_buffer, &pos, "crash.device_model", s_device_model, 0);
