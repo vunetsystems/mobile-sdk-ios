@@ -2,10 +2,10 @@ import Foundation
 import PackagePlugin
 
 @main
-struct VUInstrumentationCommand: CommandPlugin {
+struct VuInstrumentationCommand: CommandPlugin {
     func performCommand(context: PluginContext, arguments: [String]) async throws {
         let invocation = try Invocation.parse(arguments: arguments)
-        let tool = try context.tool(named: "VUSourceInstrumenter")
+        let tool = try context.tool(named: "VuSourceInstrumenter")
 
         guard let projectPath = invocation.projectPath else {
             Diagnostics.error("Missing --project <path>. Example: --project /path/to/YourApp.xcodeproj")
@@ -24,10 +24,10 @@ struct VUInstrumentationCommand: CommandPlugin {
 #if canImport(XcodeProjectPlugin)
 import XcodeProjectPlugin
 
-extension VUInstrumentationCommand: XcodeCommandPlugin {
+extension VuInstrumentationCommand: XcodeCommandPlugin {
     func performCommand(context: XcodePluginContext, arguments: [String]) throws {
         let invocation = try Invocation.parse(arguments: arguments)
-        let tool = try context.tool(named: "VUSourceInstrumenter")
+        let tool = try context.tool(named: "VuSourceInstrumenter")
 
         // Xcode passes the active project context when command is launched from the navigator.
         // directoryURL is the containing folder; the .xcodeproj lives at <dir>/<displayName>.xcodeproj
@@ -105,7 +105,7 @@ private enum PluginError: LocalizedError {
         case .invalidArguments:
             return "Invalid arguments. Usage: [install|verify|uninstall] [--project <path>] [--target <name>]"
         case .toolFailed(let code):
-            return "VUSourceInstrumenter exited with status \(code)."
+            return "VuSourceInstrumenter exited with status \(code)."
         }
     }
 }

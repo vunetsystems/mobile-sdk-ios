@@ -97,7 +97,7 @@ static void vu_custom_setDelegate(id self, SEL _cmd, id delegate) {
         // so spans produced during scene:willConnectToSession are captured.
         Class hooksClass = objc_getClass("VUInstrumentationHooks");
         if (hooksClass == Nil) {
-            hooksClass = NSClassFromString(@"vuTelemetry.VUInstrumentationHooks");
+            hooksClass = NSClassFromString(@"Vunet.VUInstrumentationHooks");
         }
         if (hooksClass != Nil) {
             SEL installAllSel = sel_registerName("installAll");

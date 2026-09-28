@@ -1,42 +1,42 @@
 // swift-tools-version: 6.1
-// vuTelemetry v0.0.20 — pre-built binary package. See README.md.
+// Vunet v0.0.21 — pre-built binary package. See README.md.
 // Built WITH library evolution: portable .swiftinterface, consumable by any Xcode >= Xcode 26.5.
 import PackageDescription
 
 let package = Package(
-    name: "vuTelemetry",
+    name: "Vunet",
     platforms: [.iOS(.v13), .macOS(.v12)],
     products: [
-        .library(name: "vuTelemetry", targets: ["vuTelemetry", "VuTelemetryBootstrap", "vuTelemetryDeps"]),
-        .library(name: "vuTelemetrySDWebImage", targets: ["vuTelemetrySDWebImage", "VUSDWebImageBootstrap", "vuTelemetrySDWebImageDeps", "vuTelemetry", "VuTelemetryBootstrap", "vuTelemetryDeps"]),
-        .plugin(name: "VUInstrumentationPlugin", targets: ["VUInstrumentationPlugin"]),
-        .plugin(name: "VUInstrumentationCommand", targets: ["VUInstrumentationCommand"]),
+        .library(name: "Vunet", targets: ["Vunet", "VuTelemetryBootstrap", "VunetDeps"]),
+        .library(name: "VunetSDWebImage", targets: ["VunetSDWebImage", "VUSDWebImageBootstrap", "VunetSDWebImageDeps", "Vunet", "VuTelemetryBootstrap", "VunetDeps"]),
+        .plugin(name: "VuInstrumentationPlugin", targets: ["VuInstrumentationPlugin"]),
+        .plugin(name: "VuInstrumentationCommand", targets: ["VuInstrumentationCommand"]),
     ],
     dependencies: [
         .package(url: "https://github.com/SDWebImage/SDWebImage.git", exact: "5.21.7"),
     ],
     targets: [
-        .binaryTarget(name: "vuTelemetry", url: "https://github.com/vunetsystems/mobile-sdk-ios/releases/download/v0.0.20/vuTelemetry.xcframework.zip", checksum: "4a1ceac4a17c93a065575b470e42fbf4790f730e736665194dfcf1ab1321af47"),
+        .binaryTarget(name: "Vunet", url: "https://github.com/vunetsystems/mobile-sdk-ios/releases/download/v0.0.21/Vunet.xcframework.zip", checksum: "9001e6c445c33bcbe1c3662df4fc5c50cbeab7d48ec5ca474ee0e9d81999d6e8"),
         .target(name: "VuTelemetryBootstrap", path: "Bootstrap/VuTelemetryBootstrap", publicHeadersPath: "."),
-        .target(name: "vuTelemetryDeps", path: "Deps"),
-        .binaryTarget(name: "vuTelemetrySDWebImage", url: "https://github.com/vunetsystems/mobile-sdk-ios/releases/download/v0.0.20/vuTelemetrySDWebImage.xcframework.zip", checksum: "4dc48d7947cda3ddf955f8938b351fb80a60ef8bf3667b2d39992952044a288d"),
+        .target(name: "VunetDeps", path: "Deps"),
+        .binaryTarget(name: "VunetSDWebImage", url: "https://github.com/vunetsystems/mobile-sdk-ios/releases/download/v0.0.21/VunetSDWebImage.xcframework.zip", checksum: "83801c42662dcf7aead1f3b859c995766d7c72197a9f5def28b4633262d37060"),
         .target(name: "VUSDWebImageBootstrap", path: "Bootstrap/VUSDWebImageBootstrap", publicHeadersPath: "include"),
-        .target(name: "vuTelemetrySDWebImageDeps", dependencies: [
+        .target(name: "VunetSDWebImageDeps", dependencies: [
             .product(name: "SDWebImage", package: "SDWebImage"),
         ], path: "DepsSDWI"),
-        .binaryTarget(name: "VUSourceInstrumenter", url: "https://github.com/vunetsystems/mobile-sdk-ios/releases/download/v0.0.20/VUSourceInstrumenter.artifactbundle.zip", checksum: "c2f6177233150309a11bf6e9d768e4ef70281086c2fa98d9d6ce845d2cee295d"),
+        .binaryTarget(name: "VuSourceInstrumenter", url: "https://github.com/vunetsystems/mobile-sdk-ios/releases/download/v0.0.21/VuSourceInstrumenter.artifactbundle.zip", checksum: "afc04047bc788e37c3a7d1bc9a5250c6efa2e88c41c5f0d2e7ecbb9d47d01fff"),
         .plugin(
-            name: "VUInstrumentationPlugin",
+            name: "VuInstrumentationPlugin",
             capability: .buildTool(),
-            dependencies: ["VUSourceInstrumenter"],
+            dependencies: ["VuSourceInstrumenter"],
             path: "Plugins/VUInstrumentationPlugin"
         ),
         .plugin(
-            name: "VUInstrumentationCommand",
+            name: "VuInstrumentationCommand",
             capability: .command(
                 intent: .custom(
                     verb: "vu-instrument",
-                    description: "Install, verify, or uninstall vuTelemetry SwiftUI instrumentation phases"
+                    description: "Install, verify, or uninstall Vunet SwiftUI instrumentation phases"
                 ),
                 permissions: [
                     .writeToPackageDirectory(
@@ -44,7 +44,7 @@ let package = Package(
                     )
                 ]
             ),
-            dependencies: ["VUSourceInstrumenter"],
+            dependencies: ["VuSourceInstrumenter"],
             path: "Plugins/VUInstrumentationCommand"
         ),
     ]

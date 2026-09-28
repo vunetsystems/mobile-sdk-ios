@@ -41,7 +41,7 @@ void vu_mark_sdk_disabled(void) {
 
 + (void)initializeIfNeeded {
     dispatch_once(&initToken, ^{
-        NSNumber *val = [[NSBundle mainBundle] infoDictionary][@"ExportDebugLogs"];
+        NSNumber *val = [[NSBundle mainBundle] infoDictionary][@"VuExportDebugLogs"];
         if (val) {
             vu_exportDebugLogsEnabled = [val boolValue];
         }
@@ -60,7 +60,7 @@ void vu_mark_sdk_disabled(void) {
             @"event": @"config_read",
             @"sdk_version": @VU_TELEMETRY_SDK_VERSION,
             @"environment": environment,
-            @"message": [NSString stringWithFormat:@"Read ExportDebugLogs from Info.plist: %@", vu_exportDebugLogsEnabled ? @"YES" : @"NO"]
+            @"message": [NSString stringWithFormat:@"Read VuExportDebugLogs from Info.plist: %@", vu_exportDebugLogsEnabled ? @"YES" : @"NO"]
         };
         NSData *jsonData = [NSJSONSerialization dataWithJSONObject:payload options:NSJSONWritingSortedKeys error:nil];
         if (jsonData) {

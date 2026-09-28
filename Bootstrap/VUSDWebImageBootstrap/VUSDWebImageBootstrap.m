@@ -38,7 +38,7 @@
     // in case it is registered under the module namespace.
     Class installer = objc_getClass("VUSDWebImageAutoInstaller");
     if (installer == nil) {
-        installer = NSClassFromString(@"vuTelemetrySDWebImage.VUSDWebImageAutoInstaller");
+        installer = NSClassFromString(@"VunetSDWebImage.VUSDWebImageAutoInstaller");
     }
     if (installer == nil) {
         return;

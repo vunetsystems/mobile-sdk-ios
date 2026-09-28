@@ -566,7 +566,7 @@ uint64_t vu_mach_time_to_unix_nanos(uint64_t machTime) {
 void vu_dispatch_bootstrap_selector(SEL selector, const char *sourceLabel) {
     Class initializerClass = objc_getClass("VuTelemetryAutoInitializer");
     if (initializerClass == Nil) {
-        initializerClass = NSClassFromString(@"vuTelemetry.VuTelemetryAutoInitializer");
+        initializerClass = NSClassFromString(@"Vunet.VuTelemetryAutoInitializer");
     }
 
     if (initializerClass != Nil && [initializerClass respondsToSelector:selector]) {

@@ -1,3 +1,3 @@
 // OpenTelemetry and other SDK dependencies are statically linked inside the
-// vuTelemetry binary. Consumers integrate with `import vuTelemetry` only.
+// Vunet binary. Consumers integrate with `import Vunet` only.
 enum VuTelemetryDepsModule {}
