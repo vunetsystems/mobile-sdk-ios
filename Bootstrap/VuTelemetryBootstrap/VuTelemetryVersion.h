@@ -10,6 +10,6 @@
 #ifndef VuTelemetryVersion_h
 #define VuTelemetryVersion_h
 
-#define VU_TELEMETRY_SDK_VERSION "0.0.21"
+#define VU_TELEMETRY_SDK_VERSION "0.0.22"
 
 #endif /* VuTelemetryVersion_h */
