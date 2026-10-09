@@ -1,4 +1,4 @@
-# Vunet v0.0.22 — pre-built XCFrameworks
+# Vunet v0.0.23 — pre-built XCFrameworks
 
 XCFrameworks for iOS (device + simulator):
 
@@ -18,7 +18,7 @@ Add as a remote Swift package (Xcode ▸ File ▸ Add Package Dependencies, or i
 `Package.swift`):
 
 ```swift
-.package(url: "https://github.com/vunetsystems/mobile-sdk-ios.git", from: "0.0.22")
+.package(url: "https://github.com/vunetsystems/mobile-sdk-ios.git", from: "0.0.23")
 ```
 
 then add the `Vunet` product. SwiftPM fetches the prebuilt
