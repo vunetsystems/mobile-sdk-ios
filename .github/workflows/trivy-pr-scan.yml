@@ -55,7 +55,7 @@ jobs:
         run: |
           set -euo pipefail
           TARBALL="trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
-          curl -fsSL -o "/tmp/$TARBALL" \
+          curl -fsSL --retry 3 --retry-all-errors -o "/tmp/$TARBALL" \
             "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/${TARBALL}"
           echo "${TRIVY_SHA256}  /tmp/$TARBALL" | sha256sum -c -
           sudo tar -xzf "/tmp/$TARBALL" -C /usr/local/bin trivy
@@ -77,13 +77,15 @@ jobs:
       # One scan, all findings, never fails here: the gate is applied by
       # trivy_report.py so the full picture is always reported first.
       # Two DB mirrors: GHCR rate-limits anonymous pulls under load.
+      # --offline-scan: don't query Maven Central etc. to resolve dependencies
+      # (they return 429 under parallel load); the vulnerability DB still updates.
       - name: Run Trivy (vulnerabilities, secrets, misconfigurations)
         run: |
           set -euo pipefail
           trivy fs . \
             --scanners vuln,secret,misconfig \
             --db-repository ghcr.io/aquasecurity/trivy-db,public.ecr.aws/aquasecurity/trivy-db \
-            --checks-bundle-repository ghcr.io/aquasecurity/trivy-checks,public.ecr.aws/aquasecurity/trivy-checks \
+            --offline-scan \
             --skip-dirs .trivy-cache \
             --format json --output trivy-report.json \
             --exit-code 0 --no-progress
@@ -121,12 +123,12 @@ jobs:
         run: |
           set -euo pipefail
           BODY=$(python3 -c 'import json,sys; print(json.dumps({"body": open("trivy-report.md").read()}))')
-          ID=$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" "$API/issues/$PR/comments?per_page=100" \
+          ID=$(curl -fsSL --retry 3 --retry-all-errors -H "Authorization: Bearer $GH_TOKEN" "$API/issues/$PR/comments?per_page=100" \
             | python3 -c 'import json,sys; print(next((str(c["id"]) for c in json.load(sys.stdin) if "<!-- trivy-pr-scan -->" in (c.get("body") or "")), ""))')
           if [ -n "$ID" ]; then
-            curl -fsSL -o /dev/null -X PATCH -H "Authorization: Bearer $GH_TOKEN" "$API/issues/comments/$ID" -d "$BODY"
+            curl -fsSL --retry 3 --retry-all-errors -o /dev/null -X PATCH -H "Authorization: Bearer $GH_TOKEN" "$API/issues/comments/$ID" -d "$BODY"
           else
-            curl -fsSL -o /dev/null -X POST -H "Authorization: Bearer $GH_TOKEN" "$API/issues/$PR/comments" -d "$BODY"
+            curl -fsSL --retry 3 --retry-all-errors -o /dev/null -X POST -H "Authorization: Bearer $GH_TOKEN" "$API/issues/$PR/comments" -d "$BODY"
           fi
 
       - name: Quality gate
