@@ -1,0 +1,6 @@
+# Trivy findings accepted for this repo (read by .github/workflows/trivy-pr-scan.yml).
+# One vulnerability/secret/misconfiguration ID per line. Say why above each entry,
+# and add an expiry so it gets revisited, e.g.:
+#
+# # golang.org/x/net: only the HTTP/2 server is affected; we use the client. Revisit 2026-12-31.
+# CVE-2025-00000 exp:2026-12-31

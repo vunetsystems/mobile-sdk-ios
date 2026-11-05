@@ -1,0 +1,138 @@
+name: Trivy PR Scan
+
+# Security pre-check on every PR: Trivy scans the PR's code for vulnerable
+# dependencies (lockfiles/manifests), leaked secrets and Dockerfile/Kubernetes misconfigurations,
+# posts the result as a PR comment and in the job summary, and fails the check
+# (quality gate) on:
+#   - CRITICAL/HIGH vulnerabilities that have a fixed version available
+#   - CRITICAL/HIGH secrets
+# Unfixed vulnerabilities and misconfigurations are reported but do not block.
+# Accepted risks go in .trivyignore (one CVE/rule ID per line, with a comment).
+#
+# Plain pull_request (not pull_request_target): this job checks out and scans PR
+# head code, so it must not run with a base-repo write token. On fork PRs the token
+# is read-only, so the comment step is skipped and the result is only in the summary.
+#
+# Trivy is installed from the pinned release tarball with its sha256 checked,
+# not via aquasecurity/trivy-action: that action's tags were hijacked in the
+# March 2026 supply-chain compromise (GHSA-69fq-xp46-6x23). To upgrade, change
+# TRIVY_VERSION and TRIVY_SHA256 together (from trivy_<ver>_checksums.txt).
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches:
+      - develop
+      - main
+      - master
+      - "release/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: trivy-pr-scan-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  TRIVY_VERSION: "0.76.1"
+  TRIVY_SHA256: "c7cbe3137fb8a48a17574bede3dd6beb16742d1e9772929940fc90082c39d9c0"
+  TRIVY_CACHE_DIR: ${{ github.workspace }}/.trivy-cache
+
+jobs:
+  trivy:
+    name: Trivy scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install Trivy
+        run: |
+          set -euo pipefail
+          TARBALL="trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          curl -fsSL -o "/tmp/$TARBALL" \
+            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/${TARBALL}"
+          echo "${TRIVY_SHA256}  /tmp/$TARBALL" | sha256sum -c -
+          sudo tar -xzf "/tmp/$TARBALL" -C /usr/local/bin trivy
+          trivy --version
+
+      # The vulnerability DB is ~80 MB and updated every few hours; one cache entry
+      # per day keeps scans fast without going stale.
+      - name: Date for DB cache key
+        id: date
+        run: echo "day=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Trivy DB
+        uses: actions/cache@v4
+        with:
+          path: .trivy-cache
+          key: trivy-db-${{ steps.date.outputs.day }}
+          restore-keys: trivy-db-
+
+      # One scan, all findings, never fails here: the gate is applied by
+      # trivy_report.py so the full picture is always reported first.
+      # Two DB mirrors: GHCR rate-limits anonymous pulls under load.
+      - name: Run Trivy (vulnerabilities, secrets, misconfigurations)
+        run: |
+          set -euo pipefail
+          trivy fs . \
+            --scanners vuln,secret,misconfig \
+            --db-repository ghcr.io/aquasecurity/trivy-db,public.ecr.aws/aquasecurity/trivy-db \
+            --checks-bundle-repository ghcr.io/aquasecurity/trivy-checks,public.ecr.aws/aquasecurity/trivy-checks \
+            --skip-dirs .trivy-cache \
+            --format json --output trivy-report.json \
+            --exit-code 0 --no-progress
+          trivy convert --format table --output trivy-report.txt trivy-report.json
+
+      - name: Build report and apply quality gate
+        id: gate
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set +e
+          python3 .github/scripts/trivy_report.py trivy-report.json trivy-report.md
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+          cat trivy-report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload full report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-report
+          path: |
+            trivy-report.json
+            trivy-report.txt
+            trivy-report.md
+          retention-days: 30
+
+      # One comment per PR, updated in place on each push (found by its marker).
+      - name: Comment on PR
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+          API: ${{ github.api_url }}/repos/${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          BODY=$(python3 -c 'import json,sys; print(json.dumps({"body": open("trivy-report.md").read()}))')
+          ID=$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" "$API/issues/$PR/comments?per_page=100" \
+            | python3 -c 'import json,sys; print(next((str(c["id"]) for c in json.load(sys.stdin) if "<!-- trivy-pr-scan -->" in (c.get("body") or "")), ""))')
+          if [ -n "$ID" ]; then
+            curl -fsSL -o /dev/null -X PATCH -H "Authorization: Bearer $GH_TOKEN" "$API/issues/comments/$ID" -d "$BODY"
+          else
+            curl -fsSL -o /dev/null -X POST -H "Authorization: Bearer $GH_TOKEN" "$API/issues/$PR/comments" -d "$BODY"
+          fi
+
+      - name: Quality gate
+        run: |
+          if [ "${{ steps.gate.outputs.exit_code }}" != "0" ]; then
+            echo "::error::Trivy quality gate failed: fixable CRITICAL/HIGH vulnerabilities or secrets found. See the PR comment or job summary."
+            exit 1
+          fi
+          echo "Trivy quality gate passed."
