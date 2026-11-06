@@ -1,0 +1,123 @@
+name: SonarQube PR Scan
+
+# Code-quality and security pre-check on every PR: SonarQube analyses the PR,
+# waits for the project's quality gate, posts the result (gate conditions,
+# vulnerabilities, bugs, security hotspots) as a PR comment and in the job
+# summary, and fails the check when the quality gate fails.
+#
+# Uses the org secrets SONAR_TOKEN and SONAR_HOST_URL. PR analysis needs
+# SonarQube Developer Edition or higher; on Community Edition the job stops
+# with an explicit error instead of overwriting the main-branch analysis.
+# The PR comment never contains the server URL (some repos are public).
+#
+# Plain pull_request, not pull_request_target: the job runs PR head code. On
+# fork and Dependabot PRs secrets are not available, so the scan is skipped.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches:
+      - develop
+      - main
+      - master
+      - "release/**"
+  push:
+    branches:
+      - develop
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: sonarqube-pr-scan-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sonarqube:
+    name: SonarQube scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+    steps:
+      - name: Check secrets and server
+        id: pre
+        run: |
+          if [ -z "$SONAR_TOKEN" ] || [ -z "$SONAR_HOST_URL" ]; then
+            echo "::notice::SONAR_TOKEN/SONAR_HOST_URL not available (fork or Dependabot PR); skipping SonarQube scan."
+            echo "run=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          URL="${SONAR_HOST_URL%/}"
+          if ! curl -fsS --connect-timeout 15 --max-time 30 --retry 2 -u "$SONAR_TOKEN:" "$URL/api/server/version" -o /tmp/version; then
+            echo "::error::SonarQube server (SONAR_HOST_URL) is not reachable from this GitHub-hosted runner. Check the server is up and allows GitHub Actions IPs."
+            exit 1
+          fi
+          EDITION=$(curl -fsS --max-time 30 -u "$SONAR_TOKEN:" "$URL/api/navigation/global" | python3 -c 'import json,sys;print(json.load(sys.stdin).get("edition") or "unknown")' || echo unknown)
+          echo "SonarQube $(cat /tmp/version), edition: $EDITION"
+          if [ "${{ github.event_name }}" = "pull_request" ] && [ "$EDITION" = "community" ]; then
+            echo "::error::SonarQube Community Edition cannot analyse pull requests separately (needs Developer Edition or the community branch plugin)."
+            exit 1
+          fi
+          echo "run=true" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout
+        if: steps.pre.outputs.run == 'true'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # full history: needed for new-code detection and blame
+          persist-credentials: false
+
+      # Pinned by SHA (v8.3.0). The scanner auto-detects the PR (key, branch, base)
+      # from the GitHub Actions environment. qualitygate.wait makes this step fail
+      # when the gate fails; the report below is written either way.
+      - name: SonarQube analysis
+        id: scan
+        if: steps.pre.outputs.run == 'true'
+        continue-on-error: true
+        uses: SonarSource/sonarqube-scan-action@d209202bc7d53ff1cc128f7f907dac145c9d6ae9 # v8.3.0
+        with:
+          args: >
+            -Dsonar.qualitygate.wait=true
+            -Dsonar.qualitygate.timeout=600
+
+      - name: Build report
+        id: report
+        if: steps.pre.outputs.run == 'true'
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          SCAN_OUTCOME: ${{ steps.scan.outcome }}
+        run: |
+          set +e
+          python3 .github/scripts/sonar_report.py sonar-report.md
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+          cat sonar-report.md >> "$GITHUB_STEP_SUMMARY"
+
+      # One comment per PR, updated in place on each push (found by its marker).
+      - name: Comment on PR
+        if: steps.pre.outputs.run == 'true' && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+          API: ${{ github.api_url }}/repos/${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          BODY=$(python3 -c 'import json,sys; print(json.dumps({"body": open("sonar-report.md").read()}))')
+          ID=$(curl -fsSL --retry 3 --retry-all-errors -H "Authorization: Bearer $GH_TOKEN" "$API/issues/$PR/comments?per_page=100" \
+            | python3 -c 'import json,sys; print(next((str(c["id"]) for c in json.load(sys.stdin) if "<!-- sonarqube-pr-scan -->" in (c.get("body") or "")), ""))')
+          if [ -n "$ID" ]; then
+            curl -fsSL --retry 3 --retry-all-errors -o /dev/null -X PATCH -H "Authorization: Bearer $GH_TOKEN" "$API/issues/comments/$ID" -d "$BODY"
+          else
+            curl -fsSL --retry 3 --retry-all-errors -o /dev/null -X POST -H "Authorization: Bearer $GH_TOKEN" "$API/issues/$PR/comments" -d "$BODY"
+          fi
+
+      - name: Quality gate
+        if: steps.pre.outputs.run == 'true'
+        run: |
+          if [ "${{ steps.report.outputs.exit_code }}" != "0" ]; then
+            echo "::error::SonarQube quality gate failed (or the analysis did not complete). See the PR comment or job summary."
+            exit 1
+          fi
+          echo "SonarQube quality gate passed."
