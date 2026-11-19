@@ -77,6 +77,10 @@ jobs:
       # Two DB mirrors: GHCR rate-limits anonymous pulls under load.
       # --offline-scan: don't query Maven Central etc. to resolve dependencies
       # (they return 429 under parallel load); the vulnerability DB still updates.
+      # Trivy masks only the part of a line its rule matched, so the rest of a secret
+      # (and neighbouring lines) can stay readable in Match/Code. Those fields are
+      # dropped before anything is written to the artifact; the report keeps file,
+      # line and rule.
       - name: Run Trivy (vulnerabilities, secrets, misconfigurations)
         run: |
           set -euo pipefail
@@ -87,6 +91,19 @@ jobs:
             --skip-dirs .trivy-cache \
             --format json --output trivy-report.json \
             --exit-code 0 --no-progress
+          python3 - <<'PY'
+          import json
+          # Redact secret text: drop matched lines and code excerpts.
+          p = "trivy-report.json"
+          d = json.load(open(p))
+          for r in d.get("Results") or []:
+              for s in r.get("Secrets") or []:
+                  s.pop("Match", None)
+                  s.pop("Code", None)
+              for m in r.get("Misconfigurations") or []:
+                  (m.get("CauseMetadata") or {}).pop("Code", None)
+          json.dump(d, open(p, "w"), indent=2)
+          PY
           trivy convert --format table --output trivy-report.txt trivy-report.json
 
       - name: Build report and apply quality gate
